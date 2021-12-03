@@ -14,8 +14,20 @@
     </include>-->
     <include>
         <uri>model://construction_barrel</uri>
-        <name>construction_barrel</name>
+        <name>construction_barrel1</name>
         <pose>5.0 0 0 0 0 0</pose>
+    </include>
+    
+    <include>
+        <uri>model://construction_barrel</uri>
+        <name>construction_barrel2</name>
+        <pose>5.0 3.0 0 0 0 0</pose>
+    </include>
+
+    <include>
+        <uri>model://construction_barrel</uri>
+        <name>construction_barrel3</name>
+        <pose>5.0 -3.0 0 0 0 0</pose>
     </include>
   </world>
 </sdf>

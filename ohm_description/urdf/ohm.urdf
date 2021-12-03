@@ -399,7 +399,6 @@
         <publishOdomTF>true</publishOdomTF>
         <publishWheelJointState>false</publishWheelJointState>
         <wheelTorque>5</wheelTorque>
-        
         </plugin>
     </gazebo>
 
