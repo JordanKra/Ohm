@@ -1,0 +1,19 @@
+<launch>
+  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-file $(find ohm_description)/urdf/ohm.urdf -urdf -z 1 -model ohm" />
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find ohm_gazebo)/worlds/ohm.world"/>
+    <!-- more default parameters can be changed here -->
+  </include>
+  
+<!-- Start rviz along side gazebo -->
+  <arg name="model" default="$(find ohm_description)/urdf/ohm.urdf" />
+  <arg name="rvizconfig" default ="$(find ohm_description)/launch/simple_config.rviz"/>
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher"> 
+        <param name="use_gui" value="TRUE"/>
+  </node>
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+
+  <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
+
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" />
+</launch>
