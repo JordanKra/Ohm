@@ -1,8 +1,11 @@
 <launch>
+
+<!-- Run the spawn_model.py script in order to load the URDF model of the robot into gazebo -->
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-file $(find ohm_description)/urdf/ohm.urdf -urdf -z 1 -model ohm" />
+  
+<!-- Launch gazebo_ros and point the world arg to our ohm.world file -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" value="$(find ohm_gazebo)/worlds/ohm.world"/>
-    <!-- more default parameters can be changed here -->
   </include>
   
 <!-- Start rviz along side gazebo -->
