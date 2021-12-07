@@ -1,6 +1,10 @@
 <?xml version="1.0"?>
 <robot name="ohm">
+
+<!-- Base footprint -->
     <link name="base_footprint"/>
+    
+<!--Chassis link and joint -->    
     <link name="base_link">
         <visual>
             <origin rpy="0 0 0" xyz="0 0 0" />
@@ -24,6 +28,16 @@
         </inertial>
     </link>
     
+    <joint name="base_footprint_to_base_link" type="fixed">
+        <origin rpy="0 0 0" xyz="0 0 0.225"/>
+        <parent link="base_footprint"/>
+        <child link="base_link"/>
+    </joint>
+    
+    
+<!-- Wheel links and joints -->
+    
+    <!-- Left wheel link and joint -->
     <link name="Left_Front_Wheel">
         <visual>
             <origin rpy="1.5708 0 0" xyz="0 0 0" />
@@ -47,6 +61,15 @@
         </inertial>
     </link>
     
+    <joint name="Left_Front_Wheel_to_Base_Link" type="continuous">
+        <origin rpy="0 0 0" xyz="0.285 0.27 -0.0508"/>
+        <parent link="base_link"/>
+        <child link="Left_Front_Wheel"/>
+        <axis xyz="0 1 0"/>
+        <dynamics damping="0.7"/>
+    </joint>
+    
+    <!-- Right wheel link and joint -->
     <link name="Right_Front_Wheel">
         <visual>
             <origin rpy="1.5708 0 0" xyz="0 0 0" />
@@ -70,6 +93,17 @@
         </inertial>
     </link>
     
+    <joint name="Right_Front_Wheel_to_Base_Link" type="continuous">
+        <origin rpy="0 0 0" xyz="0.285 -0.27 -0.0508"/>
+        <parent link="base_link"/>
+        <child link="Right_Front_Wheel"/>
+        <axis xyz="0 1 0"/>
+        <dynamics damping="0.7"/>
+    </joint>
+    
+    
+    
+<!-- Mast links and joints -->    
     <link name="Front_Mast_Pillar">
         <visual>
             <origin rpy="0 0 0" xyz="0 0 0" />
@@ -92,6 +126,12 @@
                 izz="0.166667"/>
         </inertial>
     </link>
+
+    <joint name="Front_Mast_Pillar_to_base_link" type="fixed">
+        <origin rpy="0 0 0" xyz="0.1833 0 0.7747"/>
+        <parent link="base_link"/>
+        <child link="Front_Mast_Pillar"/>
+    </joint>
 
 
     <link name="Rear_Mast_Pillar">
@@ -117,6 +157,12 @@
         </inertial>
     </link>
     
+    <joint name="Rear_Mast_Pillar_to_base_link" type="fixed">
+        <origin rpy="0 0 0" xyz="-0.223 0 0.7747"/>
+        <parent link="base_link"/>
+        <child link="Rear_Mast_Pillar"/>
+    </joint>
+    
     
     <link name="Mid_Mast_Pillar">
         <visual>
@@ -141,6 +187,12 @@
         </inertial>
     </link>
     
+    <joint name="Mid_Mast_Pillar_to_base_link" type="fixed">
+        <origin rpy="0 0 0" xyz="-0.012 0 0.5461"/>
+        <parent link="base_link"/>
+        <child link="Mid_Mast_Pillar"/>
+    </joint>
+
     
     <link name="Top_Mast_Pillar">
         <visual>
@@ -165,7 +217,14 @@
         </inertial>
     </link>
     
+    <joint name="Top_Mast_Pillar_to_base_link" type="fixed">
+        <origin rpy="0 0 0" xyz="-0.012 0 1.4224"/>
+        <parent link="base_link"/>
+        <child link="Top_Mast_Pillar"/>
+    </joint>
     
+    
+<!-- Caster wheel link and joint -->    
     <link name="Caster_Wheel">
         <visual>
             <origin rpy="0 0 0" xyz="0 0 0" />
@@ -189,7 +248,14 @@
         </inertial>
     </link>
     
+    <joint name="Caster_Wheel_to_base_link" type="fixed">
+        <origin rpy="0 0 0" xyz="-0.285 0 -0.0508"/>
+        <parent link="base_link"/>
+        <child link="Caster_Wheel"/>
+    </joint>
     
+    
+<!-- Lidar Link and joint -->
     <link name="Lidar_Link">
         <visual>
             <origin rpy="0 0 0" xyz="0 0 0" />
@@ -213,7 +279,14 @@
         </inertial>
     </link>
     
+    <joint name="Lidar_to_base_link" type="fixed">
+        <origin rpy="0 0 0" xyz="0.2722 0 0.3556"/>
+        <parent link="base_link"/>
+        <child link="Lidar_Link"/>
+    </joint>
     
+    
+<!-- Imu link and joint -->
     <link name="Imu_Link">
         <visual>
             <origin rpy="0 0 0" xyz="0 0 0" />
@@ -237,6 +310,14 @@
         </inertial>
     </link>
     
+    <joint name="Imu_Link_to_base_link" type="fixed">
+        <origin rpy="0 0 0" xyz="-0.012 0 0.5588"/>
+        <parent link="base_link"/>
+        <child link="Imu_Link"/>
+    </joint>
+    
+    
+<!-- Camera link and joint -->    
     <link name="Camera_Link">
         <visual>
             <origin rpy="0 0 0" xyz="0 0 0" />
@@ -260,77 +341,15 @@
         </inertial>
     </link>
     
-    <joint name="base_footprint_to_base_link" type="fixed">
-        <origin rpy="0 0 0" xyz="0 0 0.225"/>
-        <parent link="base_footprint"/>
-        <child link="base_link"/>
-    </joint>
-
-    <joint name="Left_Front_Wheel_to_Base_Link" type="continuous">
-        <origin rpy="0 0 0" xyz="0.285 0.27 -0.0508"/>
-        <parent link="base_link"/>
-        <child link="Left_Front_Wheel"/>
-        <axis xyz="0 1 0"/>
-        <dynamics damping="0.7"/>
-    </joint>
-    
-    <joint name="Right_Front_Wheel_to_Base_Link" type="continuous">
-        <origin rpy="0 0 0" xyz="0.285 -0.27 -0.0508"/>
-        <parent link="base_link"/>
-        <child link="Right_Front_Wheel"/>
-        <axis xyz="0 1 0"/>
-        <dynamics damping="0.7"/>
-    </joint>
-    
-    <joint name="Front_Mast_Pillar_to_base_link" type="fixed">
-        <origin rpy="0 0 0" xyz="0.1833 0 0.7747"/>
-        <parent link="base_link"/>
-        <child link="Front_Mast_Pillar"/>
-    </joint>
-
-    <joint name="Rear_Mast_Pillar_to_base_link" type="fixed">
-        <origin rpy="0 0 0" xyz="-0.223 0 0.7747"/>
-        <parent link="base_link"/>
-        <child link="Rear_Mast_Pillar"/>
-    </joint>
-    
-    <joint name="Mid_Mast_Pillar_to_base_link" type="fixed">
-        <origin rpy="0 0 0" xyz="-0.012 0 0.5461"/>
-        <parent link="base_link"/>
-        <child link="Mid_Mast_Pillar"/>
-    </joint>
-    
-    <joint name="Top_Mast_Pillar_to_base_link" type="fixed">
-        <origin rpy="0 0 0" xyz="-0.012 0 1.4224"/>
-        <parent link="base_link"/>
-        <child link="Top_Mast_Pillar"/>
-    </joint>
-    
-    <joint name="Caster_Wheel_to_base_link" type="fixed">
-        <origin rpy="0 0 0" xyz="-0.285 0 -0.0508"/>
-        <parent link="base_link"/>
-        <child link="Caster_Wheel"/>
-    </joint>
-    
-    <joint name="Lidar_to_base_link" type="fixed">
-        <origin rpy="0 0 0" xyz="0.2722 0 0.3556"/>
-        <parent link="base_link"/>
-        <child link="Lidar_Link"/>
-    </joint>
-    
-    <joint name="Imu_Link_to_base_link" type="fixed">
-        <origin rpy="0 0 0" xyz="-0.012 0 0.5588"/>
-        <parent link="base_link"/>
-        <child link="Imu_Link"/>
-    </joint>
-    
     <joint name="Camera_Link_to_base_link" type="fixed">
         <origin rpy="0 0.785398 0" xyz="0.3992 0 1.3716"/>
         <parent link="base_link"/>
         <child link="Camera_Link"/>
     </joint>
     
-<!-- Gazebo friction/color data-->
+    
+    
+<!-- Gazebo friction/color data for links-->
     <gazebo reference="Caster_Wheel">
         <mu1>0.001</mu1>
         <mu2>0.001</mu2>
@@ -377,6 +396,7 @@
         <material>Gazebo/Black</material>
     </gazebo>
     
+
 <!-- Gazebo Plugins -->
     <gazebo>
         <plugin name="differential_drive_controller" filename="libgazebo_ros_diff_drive.so">
@@ -385,7 +405,7 @@
         <updateRate>40</updateRate>
         <leftJoint>Left_Front_Wheel_to_Base_Link</leftJoint>
         <rightJoint>Right_Front_Wheel_to_Base_Link</rightJoint>
-        <wheelSeparation>0.45</wheelSeparation>
+        <wheelSeparation>0.45</wheelSeparation> <!-- Distance between the two front wheels on the y axis -->
         <wheelDiameter>0.33</wheelDiameter>
         <wheelAcceleration>1.0</wheelAcceleration>
         <torque>20</torque>
@@ -428,7 +448,7 @@
             </noise>
           </ray>
       <plugin name="gazebo_ros_head_hokuyo_controller" filename="libgazebo_ros_gpu_laser.so">
-        <topicName>/lidar</topicName>
+        <topicName>/sensor_msgs/LaserScan</topicName>
         <frameName>Lidar_Link</frameName>
       </plugin>
     </sensor>
@@ -456,7 +476,7 @@
    </gazebo>
  
    <gazebo reference="Camera_Link">
-    <sensor type="camera" name="camera1">
+    <sensor type="camera" name="camera">
       <update_rate>30.0</update_rate>
       <camera name="head">
         <horizontal_fov>1.3962634</horizontal_fov>
@@ -478,7 +498,7 @@
       <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
         <alwaysOn>true</alwaysOn>
         <updateRate>0.0</updateRate>
-        <cameraName>camera1</cameraName>
+        <cameraName>camera</cameraName>
         <imageTopicName>image_raw</imageTopicName>
         <cameraInfoTopicName>camera_info</cameraInfoTopicName>
         <frameName>Camera_Link</frameName>
@@ -508,10 +528,6 @@
       <gaussianNoise>0.05 0.05 0.05</gaussianNoise>
       <velocityDrift>0.001 0.001 0.001</velocityDrift>
       <velocityGaussianNoise>0.5 0.5 0.5</velocityGaussianNoise>
-<!--                <drift>0.001 0.001 0.001</drift>-->
-<!--                <gaussianNoise>0.01 0.01 0.01</gaussianNoise>-->
-<!--                <velocityDrift>0 0 0</velocityDrift>-->
-<!--                <velocityGaussianNoise>0.05 0.05 0.05</velocityGaussianNoise>-->
     </plugin>
   </gazebo>
   
