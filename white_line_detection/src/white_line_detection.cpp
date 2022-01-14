@@ -1,38 +1,52 @@
-#include <chrono>
-#include <flycapture/FlyCapture2.h>
 #include <opencv2/core/ocl.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
+#include <cv_bridge/cv_bridge.h>
+#include <cv_bridge/rgb_colors.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud_conversion.h>
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/CameraInfo.h>
 
-class CameraNode
+/// Node that consumes images published on the 'image_raw' topic and republishes any
+/// white pixels in the images to pointcloud/pointcloud2. This is used to detect the white lines
+/// as an obstacle for Ohm to avoid.
+class WhiteLineDetectionNode
 {
-  private:
-	FlyCapture2::Camera camera;
-	FlyCapture2::Image rawImage, encodedImage, bgrImage; //Contains the raw and converted frames from the camera.
-	FlyCapture2::Error capture;
+private:
+	/// Enable the openCv visualization if set by the node param.
+	bool enableImshow{};
 
+	/// Set on our first connection to the camera.
+	bool connected{};
 
-	bool connected;
-	bool enableImshow;
-
+	/// Publish to pointcloud topics
 	ros::Publisher pixelPub, pixelPubPCL2;
+	/// Subscribe to the camera feed
+	ros::Subscriber cameraInfoSub, imageSub;
 
+	/// The lower and upper bound for what we define 'white' as.
 	int lowColor, upperColor = 255, kernelSize, nthPixel;
+
+	/// The per color bounds of what we define a 'white' pixel as.
 	int lowB = lowColor, lowG = lowColor, lowR = lowColor;
-	int highB = upperColor, highG = upperColor, highR = upperColor; // lower and upper limits for HSV slider
-	int HEIGHT, WIDTH;												//camera resolution retrieved by camera api
-	double A, B, C, D;												// calibration constants
+	int highB = upperColor, highG = upperColor, highR = upperColor;
 
-	cv::UMat Uinput, UhsvImage, UbinaryImage, Uerosion, Utransmtx, Utransformed, Uresize; //for use on GPU
-	cv::Mat image, temp, transmtx;
-	cv::Rect ROI = cv::Rect(112, 12, 1670 - 112, 920 - 12); // TODO: change to params. (x, y, width, height)
+	/// Camera resolution as retrived from the camera_info topic.
+	int HEIGHT, WIDTH;
 
-	std::vector<cv::Point2f> quadPts, squarePts;
-	std::vector<cv::Point> pixelCoordinates;
+	/// Calibration constants. These are used for finding the offsets of the white pixels from the robot body.
+	double A, B, C, D;
+
+	/// The 3x3 perspective transform matrix. Should be treated as constant.
+	cv::UMat Utransmtx;
+	/// The region of intrest.
+	const cv::Rect ROI = cv::Rect(112, 12, 1670 - 112, 920 - 12); // TODO: change to params. (x, y, width, height)
+
+	/// Kernal used for white pixel filtering.
+	cv::Mat erosionKernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(kernelSize, kernelSize));
 
 	//empty callback functions but it is the only way to increment the sliders
 	static void lowBlueTrackbar(int, void *) {}
@@ -42,15 +56,11 @@ class CameraNode
 	static void lowRedTrackbar(int, void *) {}
 	static void highRedTrackbar(int, void *) {}
 
-  public:
-	CameraNode()
+public:
+	WhiteLineDetectionNode()
 	{
-		connected = false;
 		ros::NodeHandle nhPrivate("~");
 		ros::NodeHandle nh;
-
-		pixelPub = nh.advertise<sensor_msgs::PointCloud>("camera_cloud", 1);
-		pixelPubPCL2 = nh.advertise<sensor_msgs::PointCloud2>("camera_cloud_pcl2", 1);
 
 		nhPrivate.param("calibration_constants/A", A, 0.0);
 		nhPrivate.param("calibration_constants/B", B, 0.0);
@@ -61,31 +71,15 @@ class CameraNode
 		nhPrivate.param("lower_bound_white", lowColor, 160);
 		nhPrivate.param("enable_imshow", enableImshow, false);
 
-		capture = camera.Connect(0);
-		if (capture != FlyCapture2::PGRERROR_OK)
-		{
-			ROS_ERROR("Could not connect to camera. Please check connection");
-		}
-		else
-		{
-			connected = true;
-			capture = camera.StartCapture();
-			HEIGHT = rawImage.GetRows();
-			WIDTH = rawImage.GetCols();
-			image = cv::Mat(HEIGHT, WIDTH, CV_8UC3);
-			Utransformed = cv::UMat(HEIGHT, WIDTH, CV_8UC1);
-			UbinaryImage = cv::UMat(HEIGHT, WIDTH, CV_8UC1);
-			Uerosion = cv::UMat(HEIGHT, WIDTH, CV_8UC1);
-		}
-	}
-	~CameraNode()
-	{
-		capture = camera.StopCapture();
-		camera.Disconnect();
+		// Activate main logic loop
+		pixelPub = nh.advertise<sensor_msgs::PointCloud>("camera_cloud", 1);
+		pixelPubPCL2 = nh.advertise<sensor_msgs::PointCloud2>("camera_cloud_pcl2", 1);
+
+		imageSub = nh.subscribe<sensor_msgs::Image>("image_raw", 5, &WhiteLineDetectionNode::rosImageCallback, this);
+		cameraInfoSub = nh.subscribe<sensor_msgs::CameraInfo>("camera_info", 1, &WhiteLineDetectionNode::rosCameraInfoCallback, this);
 	}
 
-	bool ok() { return connected; }
-
+	///Sets up the GPU to run our code using OpenCl.
 	void setupOCL()
 	{
 		cv::setUseOptimized(true);
@@ -125,9 +119,10 @@ class CameraNode
 		cv::ocl::Device d = cv::ocl::Device::getDefault();
 		std::cout << d.OpenCLVersion() << std::endl;
 	}
-  
+
+	/// Sets up the constant perspective transform matrix as defined by node params.
 	void setupWarp()
-	{ // TODO: change these parameters to ros params
+	{
 		int tl_x, tl_y;
 		int tr_x, tr_y;
 		int br_x, br_y;
@@ -161,51 +156,62 @@ class CameraNode
 		cv::Point R3 = cv::Point2f(cv::Point2f(R.x + R.width, R.y + R.height));
 		cv::Point R4 = cv::Point2f(cv::Point2f(R.x, R.y + R.height));
 
-		squarePts = {R1, R2, R3, R4};
-		quadPts = {Q1, Q2, Q3, Q4};
+		std::vector<cv::Point2d> squarePts{R1, R2, R3, R4};
+		std::vector<cv::Point2d> quadPts{Q1, Q2, Q3, Q4};
 
-		transmtx = cv::getPerspectiveTransform(quadPts, squarePts);
+		//Copy transform to constant feild
+		auto transmtx = cv::getPerspectiveTransform(quadPts, squarePts);
 		transmtx.copyTo(Utransmtx);
 	}
 
-	void ptgrey2CVMat()
+	/// Converts a raw image to an openCv matrix. This function should decode the image properly automatically.
+	///
+	/// Returns the cv matrix form of the image.
+	cv::UMat ptgrey2CVMat(const sensor_msgs::ImageConstPtr &imageMsg) const
 	{
-		capture = camera.RetrieveBuffer(&rawImage);
-		if (capture != FlyCapture2::PGRERROR_OK)
-		{
-			ROS_ERROR("Could not retrieve image!, Camera Disconnected"); // TODO: change to ROS ERROR
-			connected = false;
-		}
-		// convert to bgr
-		FlyCapture2::Image bgrImage;
-		rawImage.Convert(FlyCapture2::PIXEL_FORMAT_BGR, &bgrImage);
-		// convert to OpenCV Mat
-		unsigned int rowBytes =
-			(double)bgrImage.GetReceivedDataSize() / (double)bgrImage.GetRows();
-		temp = cv::Mat(bgrImage.GetRows(), bgrImage.GetCols(), CV_8UC3,
-					   bgrImage.GetData(), rowBytes);
-		image = temp.clone();
-		image.copyTo(Uinput);
+		auto cvImage = cv_bridge::toCvCopy(imageMsg, "CV_8UC3"); // This should decode correctly, but we may need to deal with bayer filters depending on the driver.
+		return cvImage->image.getUMat(cv::ACCESS_RW);			 //TODO make sure this access is correct.
 	}
 
-	void shiftPerspective()
+	/// Applies the perspective warp to the image.
+	///
+	/// Returns the warped image matrix.
+	cv::UMat shiftPerspective(cv::UMat &inputImage) const
 	{
-		cv::warpPerspective(Uinput, Utransformed, Utransmtx, Utransformed.size());
-		//cv::imshow("warp",Utransformed);
-		Uresize = Utransformed(ROI);
-	}
-	void imageFiltering()
-	{
-		cv::Mat erosionKernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(kernelSize, kernelSize));
-		cv::inRange(Uresize, cv::Scalar(lowB, lowG, lowR), cv::Scalar(highB, highG, highR), UbinaryImage);
-		cv::erode(UbinaryImage, Uerosion, erosionKernel);
+		//The transformed image
+		auto transformed = cv::UMat(HEIGHT, WIDTH, CV_8UC1);
+		//Apply the perspective warp previously calibrated.
+		cv::warpPerspective(inputImage, transformed, Utransmtx, transformed.size());
+
+		return transformed(ROI);
 	}
 
-	void getPixelPointCloud()
+	/// Filters non-white pixels out of the warped image.
+	///
+	/// Returns the eroded image matrix. The only pixels left should be white.
+	cv::UMat imageFiltering(cv::UMat &warpedImage) const
+	{
+		auto binaryImage = cv::UMat(HEIGHT, WIDTH, CV_8UC1);
+		auto erodedImage = cv::UMat(HEIGHT, WIDTH, CV_8UC1);
+
+		cv::inRange(warpedImage, cv::Scalar(lowB, lowG, lowR), cv::Scalar(highB, highG, highR), binaryImage);
+		cv::erode(binaryImage, erodedImage, erosionKernel);
+
+		return erodedImage;
+	}
+
+	/// Converts the white pixel matrix into a pointcloud, then publishes the pointclouds.
+	///
+	/// This function works by offsetting each pixel by some calibrated constants to get the geographical lie of that pixel, which becomes a point
+	/// in the pointcloud. This pointcloud is then broadcast, allowing the nav stack to see the white lines as obsticles.
+	void getPixelPointCloud(cv::UMat &erodedImage) const
 	{
 		sensor_msgs::PointCloud msg;
 		sensor_msgs::PointCloud2 msg2;
-		cv::findNonZero(Uerosion, pixelCoordinates);
+		std::vector<cv::Point> pixelCoordinates;
+
+		cv::findNonZero(erodedImage, pixelCoordinates);
+		//Iter through all the white pixels, adding their locations to pointclouds.
 		for (size_t i = 0; i < pixelCoordinates.size(); i++)
 		{
 			if (i % nthPixel == 0)
@@ -217,13 +223,13 @@ class CameraNode
 				msg.points.push_back(pixelLoc);
 			}
 		}
-    
+
 		sensor_msgs::convertPointCloudToPointCloud2(msg, msg2);
 
 		pixelPub.publish(msg);
 		pixelPubPCL2.publish(msg2);
 	}
-  
+
 	void createGUI()
 	{
 		cv::namedWindow("original", cv::WINDOW_FREERATIO);
@@ -238,14 +244,48 @@ class CameraNode
 		cv::createTrackbar("High Green", "TRACKBARS", &highG, upperColor, highGreenTrackbar);
 		cv::createTrackbar("High Red", "TRACKBARS", &highR, upperColor, highRedTrackbar);
 	}
-  
-  void display() // TODO: add param for displaying windows or not
+
+	/// Updates the displayed guis with the last processed image.
+	void display(cv::UMat &Uinput, cv::UMat &Utransformed, cv::UMat &Uerosion)
 	{
-		if (enableImshow)
+		cv::imshow("original", Uinput);
+		cv::imshow("warp", Utransformed);
+		cv::imshow("erosion", Uerosion);
+	}
+
+	/// Callback passed to the image topic subscription. This produces a pointcloud for every
+	/// image sent on the topic.
+	void rosImageCallback(const sensor_msgs::ImageConstPtr &imageMsg)
+	{
+		if (!connected)
 		{
-			cv::imshow("original", Uinput);
-			cv::imshow("warp", Utransformed);
-			cv::imshow("erosion", Uerosion);
+			ROS_ERROR("Received image without receiving camera info first. This should not occur, and is a logic error.");
+		}
+		else
+		{
+			//Decode image
+			auto cvImg = ptgrey2CVMat(imageMsg);
+			//Perspective warp
+			auto warpedImg = shiftPerspective(cvImg);
+			//Filter non-white pixels out
+			auto filteredImg = imageFiltering(warpedImg);
+			//Convert pixels to pointcloud and publish
+			getPixelPointCloud(filteredImg);
+
+			//Display to gui if enabled.
+			if (enableImshow)
+				display(cvImg, warpedImg, filteredImg);
+		}
+	}
+
+	/// Callback passed to the camera info sub.
+	void rosCameraInfoCallback(const sensor_msgs::CameraInfoConstPtr &infoMsg)
+	{
+		if (!connected) //attempt to prevent this callback from spamming.
+		{
+			HEIGHT = infoMsg->height;
+			WIDTH = infoMsg->width;
+			ROS_INFO("Connected to camera");
 		}
 	}
 };
@@ -254,30 +294,15 @@ int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "white_line_detection");
 
-	CameraNode whiteLineDetector;
-	
-	if (whiteLineDetector.ok())
-	{
-		whiteLineDetector.setupOCL();
-		whiteLineDetector.createGUI();
-		whiteLineDetector.setupWarp(); // 05/15/2019 starting from clockwise tl_x: (662, 315) (1263, 318) (1371, 522) (573, 520) 1.5015
+	WhiteLineDetectionNode whiteLineDetector;
 
-		while ((char)cv::waitKey(1) != 'q' && ros::ok())
-		{
-			whiteLineDetector.ptgrey2CVMat();
+	//Setup enviornment
+	whiteLineDetector.setupOCL();
+	whiteLineDetector.createGUI();
+	whiteLineDetector.setupWarp(); // 05/15/2019 starting from clockwise tl_x: (662, 315) (1263, 318) (1371, 522) (573, 520) 1.5015
 
-			if (whiteLineDetector.ok())
-			{
-				whiteLineDetector.shiftPerspective();
-				whiteLineDetector.imageFiltering();
-
-				whiteLineDetector.getPixelPointCloud();
-				whiteLineDetector.display();
-			} else {
-				break; // there was an error and the camera is disconnected
-			}
-		}
-	}
+	//This node is driven by the image topic, so just spin.
+	ros::spin();
 
 	ROS_INFO("Camera node shutting down");
 

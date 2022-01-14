@@ -11,17 +11,13 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   sensor_msgs
+  cv_bridge
 )
 
 find_package(OpenCV 4 REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-
-## Find Flycap libs
-find_library(POINTGREY_LIB NAMES libflycapture.so.2 flycapture) # find shared object file, generally in /usr/lib
-find_path(POINTGREY_INCLUDE_DIR NAMES flycapture/FlyCapture2.h) # find the include directory, generally in /usr/include
-file(GLOB_RECURSE POINTGREY_HEADER ${POINTGREY_INCLUDE_DIR}*/flycapture/FlyCapture2.h ${CMAKE_CURRENT_BINARY_DIR}/usr/include*/flycapture/FlyCapture2.h) # generate list of flycap header files
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -126,8 +122,6 @@ include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
-#	/usr/include/flycapture/*
-  ${POINTGREY_INCLUDE_DIR}
 )
 
 ## Declare a C++ library
@@ -159,7 +153,6 @@ add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catk
 target_link_libraries(${PROJECT_NAME}_node
    ${catkin_LIBRARIES}
    ${OpenCV_LIBS}
-   ${POINTGREY_LIB}
 )
 
 #############
