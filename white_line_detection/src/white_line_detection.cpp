@@ -35,7 +35,7 @@ private:
 	int highB = upperColor, highG = upperColor, highR = upperColor;
 
 	/// Camera resolution as retrived from the camera_info topic.
-	int HEIGHT, WIDTH;
+	int HEIGHT{}, WIDTH{};
 
 	/// Calibration constants. These are used for finding the offsets of the white pixels from the robot body.
 	double A, B, C, D;
@@ -286,6 +286,7 @@ public:
 			HEIGHT = infoMsg->height;
 			WIDTH = infoMsg->width;
 			ROS_INFO("Connected to camera");
+			connected = true;
 		}
 	}
 };
